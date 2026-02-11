@@ -1,44 +1,199 @@
-# Saga-Pattern
+## Saga Pattern Implementation
+Distributed transactions with eventual consistency using event-driven microservices.
 
-Demonstration of distributed transactions in microservice architecture 
+This project demonstrates how to handle complex business transactions across multiple microservices using the Saga Pattern with asynchronous messaging.
 
-The systems is a sequencial of transaction beetwen client and the microservice app . A saga is sequence of local transactions that are coordinated using messaging. Each local transaction updates data in a single service. Because each local transaction commits its
-changes, if a saga must roll back due to the violation of a business rule, it must execute compensating transactions to explicitly undo changes.
+## Problem
 
-  Service Order 
-                
-                The first step of transaction which receiver requisition from client or external system through API
-                Service Order create an order and register the status of order as "processing state" and publish to message-broker 
-                to next service operating in this transaction .
+In a microservice architecture:
 
-Service Paymento   
-                
-                a) Is the second step  of sequencial transaction which consumes the event from Order Service through message-broker  
-                b) The Payment Service verify data event and try to make the payment process
-                c) if not ocurred the payment process the Payment Service must roll back the process.
-                d) otherwise the payment ocurred OK and then the Payment Service must register the 
-                    processing in database as "PROCESSING" 
-                e) And then the Payment Service must publish to message-broker to next service operating in this transaction .
-                     
-                   
-Shippiment Service   
-                      
-                a) The third step of sequence the Shippiment Service consumes the event from Payment Service through message-broker  
-                b) The Shippiment Service verify the data event and try to make the shippment process
-                c) if not ocurred the shippment process the Shippiment Service must roll back the process.
-                d) otherwise the shippment ocurred OK and then the Shippiment Service must register the 
-                    processing in database as status "PROCESSING" 
-                e) And then the Shippiment Service must publish to message-broker to next service operating in this transaction .
+Each service owns its own database
+
+There is no global transaction (no distributed ACID transaction)
+
+If one service fails, the system can become inconsistent
+
+Rolling back across services is complex
+
+How do we guarantee data consistency without using distributed transactions?
+
+### Solution
+
+This project implements the Choreography-based Saga Pattern, where:
+
+Each service performs a local transaction
+
+Services communicate via message broker
+
+If a step fails, a compensating transaction is triggered
+
+The system guarantees eventual consistency
+
+Each service reacts to events and publishes new events to continue the transaction flow.
+
+## Features
+
+##### Distributed transaction management
+
+##### Event-driven communication
+
+##### Asynchronous messaging
+
+##### Local database per service
+
+##### Compensating transactions
+
+##### Order lifecycle management
+
+##### Payment validation flow
+
+##### Shipment processing
+
+##### User notification system
+
+##### Order state finalization (APPROVED / FAILED)
+
+## Tech Stack
+
+Java / Spring Boot
+
+Message Broker (RabbitMQ or Kafka)
+
+REST APIs
+
+JPA / Hibernate
+
+Relational Database (PostgreSQL or similar)
+
+Docker (optional)
+
+## Architecture
+#### Saga Flow (Choreography Model)
+
+Client ---- Order Service    ----  Payment Service ---- Shipment Service ---- Notification Service --> Order Service (Final State Update)
+ 
+
+### Services Overview
+#### Order Service
+
+Receives client request
+
+Creates order with status: PROCESSING
+
+Publishes OrderCreated event
+
+#### Payment Service
+
+Consumes OrderCreated
+
+Attempts payment processing
+
+On success:
+
+Saves status PROCESSING
+
+Publishes PaymentProcessed
+
+On failure:
+
+Publishes compensating event
+
+#### Shipment Service
+
+Consumes PaymentProcessed
+
+Attempts shipment process
+
+On success:
+
+Saves status PROCESSING
+
+Publishes ShipmentProcessed
+
+On failure:
+
+Publishes compensating event
+
+#### Notification Service
+
+Consumes ShipmentProcessed
+
+Sends asynchronous notification
+
+Updates order state to APPROVED
+
+Publishes OrderApproved
+
+## How to Run
+#### Clone the repository
+git clone <repository-url>
+
+#### Start the message broker
+
+Example using Docker:
+
+docker-compose up
+
+#### Run each microservice
+
+Start services individually:
+
+Order Service
+
+Payment Service
+
+Shipment Service
+
+Notification Service
+
+#### Test the flow
+
+Send a POST request:
+
+POST /orders
 
 
-Notification Service 
+The saga flow will start automatically via events.
 
-               a) The final step of sequence of transactions is the Notification Service consumes the event from Shippiment Service 
-                   through message-broker  
-               b) The Notification Service verify the data event and try to make the communication with app client or external system                           process the communication is asynchronous so when the user be online they will receiver de notification.
-               d) otherwise the user be online then the Notification Service must register the 
-                   processing in database as status "PROCESSING" 
-               e) And then the Notification Service must publish to message-broker to changes the state of the Order to APPROVED, and                            publishes an OrderApproved event.
-                     
+#### Add architecture diagrams, broker dashboard screenshots, logs, and database states here to increase visual impact.
 
+## Technical Decisions
+🔹 Why Choreography over Orchestration?
 
+Loosely coupled services
+
+No central coordinator
+
+Better scalability
+
+Simpler event-driven model
+
+🔹 Why Asynchronous Messaging?
+
+Improves resilience
+
+Enables eventual consistency
+
+Avoids blocking calls
+
+Better fault tolerance
+
+🔹 Why Compensating Transactions?
+
+Since distributed ACID transactions are not feasible in microservices, compensating actions guarantee business consistency when failures occur.
+
+#### Next Steps
+
+Implement Saga Orchestration version for comparison
+
+Add Observability (OpenTelemetry + Zipkin)
+
+Implement Retry & Dead Letter Queue
+
+Add Circuit Breaker (Resilience4j)
+
+Implement idempotency handling
+
+Improve monitoring dashboard
+
+Add integration tests for full saga flow
